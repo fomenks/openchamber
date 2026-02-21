@@ -222,7 +222,7 @@ export function languageByExtension(filePath: string): Extension | null {
     case 'c':
     case 'cpp':
     case 'h':
-    case 'hpp'
+    case 'hpp':
       return cpp();
     case 'go':
       return go();
