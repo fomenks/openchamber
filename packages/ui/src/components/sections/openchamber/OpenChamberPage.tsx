@@ -103,7 +103,7 @@ const ShortcutsSectionContent: React.FC = () => {
 // Visual section: Theme Mode, Font Size, Spacing, Corner Radius, Input Bar Offset (mobile), Nav Rail
 const VisualSectionContent: React.FC = () => {
     const isVSCode = isVSCodeRuntime();
-    const visibleSettings: Array<'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'terminalQuickKeys' | 'navRail' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader'> = [
+    return <OpenChamberVisualSettings visibleSettings={[
         'theme',
         'pwaInstallName',
         'fontSize',
@@ -111,20 +111,13 @@ const VisualSectionContent: React.FC = () => {
         'spacing',
         'cornerRadius',
         'inputBarOffset',
-        'terminalQuickKeys',
-        'navRail',
-    ];
-
-    if (isVSCode) {
-        visibleSettings.push('mermaidRendering', 'userMessageRendering', 'stickyUserHeader');
-    }
-
-    return <OpenChamberVisualSettings visibleSettings={visibleSettings} />;
+        ...(!isVSCode ? ['terminalQuickKeys' as const, 'navRail' as const] : []),
+    ]} />;
 };
 
-// Chat section: Default Tool Output, User message rendering, Diff layout, Mobile status bar, Show reasoning traces, Queue mode, Persist draft
+// Chat section: Default Tool Output, User message rendering, Diff layout, Mobile status bar, Show reasoning traces, Justification activity, Activity header timestamps, Queue mode, Persist draft
 const ChatSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'mermaidRendering', 'userMessageRendering', 'stickyUserHeader', 'diffLayout', 'mobileStatusBar', 'dotfiles', 'reasoning', 'textJustificationActivity', 'queueMode', 'persistDraft']} />;
+    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'mermaidRendering', 'userMessageRendering', 'stickyUserHeader', 'diffLayout', 'mobileStatusBar', 'dotfiles', 'reasoning', 'textJustificationActivity', 'activityHeaderTimestamps', 'queueMode', 'persistDraft']} />;
 };
 
 // Sessions section: Default model & agent, Session retention, Memory limits

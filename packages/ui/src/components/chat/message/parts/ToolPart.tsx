@@ -141,9 +141,6 @@ const LiveDuration: React.FC<{ start: number; end?: number; active: boolean }> =
     return <>{formatDuration(start, end, now)}</>;
 };
 
-// TODO: Re-enable tool header timestamp display after hover UX is redesigned.
-const ENABLE_TOOL_HEADER_TIMESTAMPS = false;
-
 const parseDiffStats = (metadata?: Record<string, unknown>): { added: number; removed: number } | null => {
     if (!metadata?.diff || typeof metadata.diff !== 'string') return null;
 
@@ -227,6 +224,45 @@ const getFirstChangedLineFromMetadata = (tool: string, metadata?: Record<string,
         if (Number.isFinite(line)) {
             return line;
         }
+    }
+
+    return undefined;
+};
+
+const getPrimaryDiffFromMetadata = (
+    tool: string,
+    metadata?: Record<string, unknown>,
+    preferredPath?: string,
+): string | undefined => {
+    if (!metadata || (tool !== 'edit' && tool !== 'multiedit' && tool !== 'apply_patch')) {
+        return undefined;
+    }
+
+    const files = Array.isArray(metadata.files) ? metadata.files : [];
+    if (files.length > 0) {
+        const preferred = typeof preferredPath === 'string' && preferredPath.length > 0
+            ? preferredPath
+            : undefined;
+        const matched = preferred
+            ? files.find((file) => {
+                if (!file || typeof file !== 'object') {
+                    return false;
+                }
+                const candidate = file as { relativePath?: unknown; filePath?: unknown };
+                return candidate.relativePath === preferred || candidate.filePath === preferred;
+            })
+            : files[0];
+
+        if (matched && typeof matched === 'object') {
+            const patch = (matched as { diff?: unknown }).diff;
+            if (typeof patch === 'string' && patch.trim().length > 0) {
+                return patch;
+            }
+        }
+    }
+
+    if (typeof metadata.diff === 'string' && metadata.diff.trim().length > 0) {
+        return metadata.diff;
     }
 
     return undefined;
@@ -1504,6 +1540,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
 }) => {
     const state = part.state;
     const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
+    const showActivityHeaderTimestamps = useUIStore((store) => store.showActivityHeaderTimestamps);
 
     const isTaskTool = part.tool.toLowerCase() === 'task';
 
@@ -1713,14 +1750,21 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
         let filePath: unknown;
         let targetLine: number | undefined;
+        let toolDiff: string | undefined;
         if (part.tool === 'edit' || part.tool === 'multiedit') {
             filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
             targetLine = getFirstChangedLineFromMetadata(part.tool, metadata);
+            if (typeof filePath === 'string') {
+                toolDiff = getPrimaryDiffFromMetadata(part.tool, metadata, filePath);
+            }
         } else if (part.tool === 'apply_patch') {
             const files = Array.isArray(metadata?.files) ? metadata?.files : [];
             const firstFile = files[0] as { relativePath?: string; filePath?: string } | undefined;
             filePath = firstFile?.relativePath || firstFile?.filePath;
             targetLine = getFirstChangedLineFromMetadata(part.tool, metadata);
+            if (typeof filePath === 'string') {
+                toolDiff = getPrimaryDiffFromMetadata(part.tool, metadata, filePath);
+            }
         } else if (['write', 'create', 'file_write', 'read', 'view', 'file_read', 'cat'].includes(part.tool)) {
             filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
         }
@@ -1730,6 +1774,11 @@ const ToolPart: React.FC<ToolPartProps> = ({
             let absolutePath = filePath;
             if (!filePath.startsWith('/')) {
                 absolutePath = currentDirectory.endsWith('/') ? currentDirectory + filePath : currentDirectory + '/' + filePath;
+            }
+            if (runtime.runtime.isVSCode && toolDiff && (part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch')) {
+                const label = `${getRelativePath(absolutePath, currentDirectory)} (changes)`;
+                void runtime.editor.openDiff('', absolutePath, label, { line: targetLine, patch: toolDiff });
+                return;
             }
             runtime.editor.openFile(absolutePath, targetLine);
         } else {
@@ -1826,7 +1875,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             <span
                                 className={cn(
                                     'text-muted-foreground/80 transition-opacity duration-150',
-                                    !isMobile && endedTimestampText && ENABLE_TOOL_HEADER_TIMESTAMPS && 'group-hover/tool:opacity-0'
+                                    !isMobile && endedTimestampText && showActivityHeaderTimestamps && 'group-hover/tool:opacity-0'
                                 )}
                             >
                                 <LiveDuration
@@ -1835,10 +1884,10 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                     active={Boolean(isActive && typeof effectiveTimeEnd !== 'number')}
                                 />
                             </span>
-                            {!isMobile && endedTimestampText && ENABLE_TOOL_HEADER_TIMESTAMPS ? (
+                            {!isMobile && endedTimestampText && showActivityHeaderTimestamps ? (
                                 <span
                                     className={cn(
-                                        'pointer-events-none absolute right-0 top-0 whitespace-nowrap text-muted-foreground/70 transition-opacity duration-150',
+                                        'pointer-events-none absolute right-0 top-0 z-10 whitespace-nowrap rounded-sm bg-[var(--surface-background)] px-1 text-muted-foreground/70 transition-opacity duration-150',
                                         'opacity-0 group-hover/tool:opacity-100'
                                     )}
                                 >
@@ -1847,7 +1896,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             ) : null}
                         </span>
                     ) : null}
-                    {typeof effectiveTimeStart !== 'number' && !isMobile && endedTimestampText && ENABLE_TOOL_HEADER_TIMESTAMPS ? (
+                    {typeof effectiveTimeStart !== 'number' && !isMobile && endedTimestampText && showActivityHeaderTimestamps ? (
                         <span className="ml-auto text-muted-foreground/70 flex-shrink-0 tabular-nums">
                             {endedTimestampText}
                         </span>
